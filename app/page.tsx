@@ -1,25 +1,20 @@
 'use client'
 
 import { Authenticated, Unauthenticated } from 'convex/react'
-import { SignInButton, UserButton } from '@clerk/nextjs'
-import { useQuery } from 'convex/react'
-import { api } from '../convex/_generated/api'
+import { SignInButton } from '@clerk/nextjs'
+import { CalendarShell } from '@/components/calendar/CalendarShell'
 
 export default function Home() {
   return (
     <>
       <Authenticated>
-        <UserButton />
-        <Content />
+        <CalendarShell />
       </Authenticated>
       <Unauthenticated>
-        <SignInButton />
+        <div className="flex h-screen items-center justify-center">
+          <SignInButton />
+        </div>
       </Unauthenticated>
     </>
   )
-}
-
-function Content() {
-  const messages = useQuery(api.messages.getForCurrentUser)
-  return <div>Authenticated content: {messages?.length}</div>
 }
