@@ -2,15 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { CalendarHeader } from './CalendarHeader'
-import { MonthView } from './views/MonthView'
-import { WeekView } from './views/WeekView'
-import { DayView } from './views/DayView'
+import { TimelineView } from './views/TimelineView'
 import { EventDialog } from './EventDialog'
+import { DayExpansion } from './components/DayExpansion'
+import { YearViewModal } from './components/YearViewModal'
 import { useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-
-export type CalendarView = 'month' | 'week' | 'day'
 
 export interface CalendarEvent {
   _id: Id<'events'>
@@ -25,63 +23,31 @@ export interface CalendarEvent {
 }
 
 export function CalendarShell() {
-  const [view, setView] = useState<CalendarView>('month')
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
+  const [isDayExpansionOpen, setIsDayExpansionOpen] = useState(false)
+  const [expandedDate, setExpandedDate] = useState<Date | null>(null)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const today = new Date()
+    return { year: today.getFullYear(), month: today.getMonth() }
+  })
 
-  // Calculate date range based on view
-  const getDateRange = () => {
-    const year = selectedDate.getFullYear()
-    const month = selectedDate.getMonth() + 1
-    const startOfWeek = new Date(selectedDate)
-    startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay())
-    startOfWeek.setHours(0, 0, 0, 0)
+  // Calculate date range for current month
+  const startDate = new Date(currentMonth.year, currentMonth.month, 1)
+  startDate.setHours(0, 0, 0, 0)
+  
+  const endDate = new Date(currentMonth.year, currentMonth.month + 1, 0)
+  endDate.setHours(23, 59, 59, 999)
 
-    switch (view) {
-      case 'month':
-        return { year, month }
-      case 'week':
-        return { startDate: startOfWeek.getTime() }
-      case 'day':
-        return { date: selectedDate.getTime() }
+  // Fetch events for current month
+  const events = useQuery(
+    api.events.getEventsForRange,
+    {
+      startDate: startDate.getTime(),
+      endDate: endDate.getTime(),
     }
-  }
-
-  // Fetch events based on current view
-  const monthEvents = useQuery(
-    api.events.getEventsForMonth,
-    view === 'month'
-      ? {
-          year: selectedDate.getFullYear(),
-          month: selectedDate.getMonth() + 1,
-        }
-      : 'skip'
-  )
-
-  const weekStart = (() => {
-    const start = new Date(selectedDate)
-    start.setDate(selectedDate.getDate() - selectedDate.getDay())
-    start.setHours(0, 0, 0, 0)
-    return start.getTime()
-  })()
-
-  const weekEvents = useQuery(
-    api.events.getEventsForWeek,
-    view === 'week' ? { startDate: weekStart } : 'skip'
-  )
-
-  const dayEvents = useQuery(
-    api.events.getEventsForDay,
-    view === 'day' ? { date: selectedDate.getTime() } : 'skip'
-  )
-
-  const events =
-    view === 'month'
-      ? monthEvents ?? []
-      : view === 'week'
-        ? weekEvents ?? []
-        : dayEvents ?? []
+  ) ?? []
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -100,40 +66,24 @@ export function CalendarShell() {
         setIsEventDialogOpen(true)
       } else if (e.key === 't' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        setSelectedDate(new Date())
-      } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
+        const today = new Date()
+        setSelectedDate(today)
+        setCurrentMonth({ year: today.getFullYear(), month: today.getMonth() })
+      } else if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Spacebar to return to today regardless of current month
         e.preventDefault()
-        setView('month')
-      } else if (e.key === 'w' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        setView('week')
-      } else if (e.key === 'd' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        setView('day')
-      } else if (e.key === 'ArrowLeft' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        navigateDate(-1)
-      } else if (e.key === 'ArrowRight' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        navigateDate(1)
+        const today = new Date()
+        setSelectedDate(today)
+        setCurrentMonth({ year: today.getFullYear(), month: today.getMonth() })
+      } else if (e.key === 'Escape') {
+        setIsDayExpansionOpen(false)
+        setIsEventDialogOpen(false)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [view, selectedDate])
-
-  const navigateDate = (direction: number) => {
-    const newDate = new Date(selectedDate)
-    if (view === 'month') {
-      newDate.setMonth(newDate.getMonth() + direction)
-    } else if (view === 'week') {
-      newDate.setDate(newDate.getDate() + direction * 7)
-    } else {
-      newDate.setDate(newDate.getDate() + direction)
-    }
-    setSelectedDate(newDate)
-  }
+  }, [])
 
   const handleNewEvent = () => {
     setEditingEvent(null)
@@ -145,49 +95,60 @@ export function CalendarShell() {
     setIsEventDialogOpen(true)
   }
 
+  const handleCreateEvent = (date: Date) => {
+    setEditingEvent(null)
+    setSelectedDate(date)
+    setIsEventDialogOpen(true)
+  }
+
   const handleEventCreated = () => {
     setIsEventDialogOpen(false)
     setEditingEvent(null)
   }
 
+  const handleDayClick = (date: Date) => {
+    setExpandedDate(date)
+    setSelectedDate(date)
+    setIsDayExpansionOpen(true)
+  }
+
+  // Scroll to today when "Today" button is clicked
+  const handleTodayClick = () => {
+    setSelectedDate(new Date())
+    // TimelineView will handle scrolling
+  }
+
+  const getEventsForDate = (date: Date): CalendarEvent[] => {
+    const dateStart = new Date(date)
+    dateStart.setHours(0, 0, 0, 0)
+    const dateEnd = new Date(date)
+    dateEnd.setHours(23, 59, 59, 999)
+
+    return (events as CalendarEvent[]).filter((event) => {
+      const eventStart = new Date(event.startTime)
+      return eventStart >= dateStart && eventStart <= dateEnd
+    })
+  }
+
+  const [isFullCalendarOpen, setIsFullCalendarOpen] = useState(false)
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <CalendarHeader
-        view={view}
-        onViewChange={setView}
         selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
-        onNavigate={navigateDate}
+        onDateChange={handleTodayClick}
         onNewEvent={handleNewEvent}
       />
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full transition-opacity duration-200">
-          {view === 'month' && (
-            <MonthView
-              selectedDate={selectedDate}
-              events={events as CalendarEvent[]}
-              onEventClick={handleEditEvent}
-              onDateClick={(date) => {
-                setSelectedDate(date)
-                setView('day')
-              }}
-            />
-          )}
-          {view === 'week' && (
-            <WeekView
-              selectedDate={selectedDate}
-              events={events as CalendarEvent[]}
-              onEventClick={handleEditEvent}
-            />
-          )}
-          {view === 'day' && (
-            <DayView
-              selectedDate={selectedDate}
-              events={events as CalendarEvent[]}
-              onEventClick={handleEditEvent}
-            />
-          )}
-        </div>
+      <div className="flex-1 min-w-0">
+        <TimelineView
+          selectedDate={selectedDate}
+          events={events as CalendarEvent[]}
+          onDayClick={handleDayClick}
+          onDateChange={setSelectedDate}
+          onMonthChange={(year, month) => setCurrentMonth({ year, month })}
+          currentMonth={currentMonth}
+          onFullCalendarClick={() => setIsFullCalendarOpen(true)}
+        />
       </div>
       <EventDialog
         open={isEventDialogOpen}
@@ -196,7 +157,30 @@ export function CalendarShell() {
         defaultDate={selectedDate}
         onSuccess={handleEventCreated}
       />
-    </div>
-  )
-}
+          {expandedDate && (
+            <DayExpansion
+              open={isDayExpansionOpen}
+              onOpenChange={setIsDayExpansionOpen}
+              date={expandedDate}
+              events={getEventsForDate(expandedDate)}
+              onEditEvent={handleEditEvent}
+              onCreateEvent={handleCreateEvent}
+              onEventDeleted={() => {
+                // Events will refresh automatically via query
+              }}
+            />
+          )}
+          <YearViewModal
+            open={isFullCalendarOpen}
+            onOpenChange={setIsFullCalendarOpen}
+            currentDate={selectedDate}
+            onMonthSelect={(date) => {
+              setSelectedDate(date)
+              setCurrentMonth({ year: date.getFullYear(), month: date.getMonth() })
+            }}
+            events={events as CalendarEvent[]}
+          />
+        </div>
+      )
+    }
 

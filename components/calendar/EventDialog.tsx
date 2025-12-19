@@ -27,6 +27,7 @@ import { format } from 'date-fns'
 import { CalendarIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CalendarEvent } from './CalendarShell'
+import { TimePicker } from './components/TimePicker'
 
 interface EventDialogProps {
   open: boolean
@@ -214,26 +215,18 @@ export function EventDialog({
 
           {!allDay && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="startTime">Start time</Label>
-                <Input
-                  id="startTime"
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="endTime">End time</Label>
-                <Input
-                  id="endTime"
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  required
-                />
-              </div>
+              <TimePicker
+                id="startTime"
+                label="Start time"
+                value={startTime}
+                onChange={setStartTime}
+              />
+              <TimePicker
+                id="endTime"
+                label="End time"
+                value={endTime}
+                onChange={setEndTime}
+              />
             </div>
           )}
 

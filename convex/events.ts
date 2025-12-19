@@ -96,6 +96,32 @@ export const getEventsForDay = query({
   },
 });
 
+export const getEventsForRange = query({
+  args: {
+    startDate: v.number(),
+    endDate: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      throw new Error("Not authenticated");
+    }
+
+    const userId = identity.subject;
+
+    return await ctx.db
+      .query("events")
+      .withIndex("by_user_start", (q) => q.eq("userId", userId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("startTime"), args.startDate),
+          q.lte(q.field("startTime"), args.endDate)
+        )
+      )
+      .collect();
+  },
+});
+
 export const createEvent = mutation({
   args: {
     title: v.string(),

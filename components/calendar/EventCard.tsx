@@ -23,10 +23,8 @@ export function EventCard({ event, variant, onEdit, onDelete }: EventCardProps) 
   const deleteEvent = useMutation(api.events.deleteEvent)
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this event?')) {
-      await deleteEvent({ id: event._id })
-      onDelete?.()
-    }
+    await deleteEvent({ id: event._id })
+    onDelete?.()
   }
 
   const formatTime = (timestamp: number) => {
